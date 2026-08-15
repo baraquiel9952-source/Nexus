@@ -248,6 +248,16 @@ body {
   // ⚠️ Ahora el frontend vive en Render y el API en Vercel: URL absoluta obligatoria
   const API_URL = 'https://nexus-eight-weld-52.vercel.app/api/nexus';
 
+  // Session ID persistente para la memoria de sesión (seguimientos tipo "¿y la línea 12?")
+  function getSessionId() {
+    let id = localStorage.getItem('nexus_session_id');
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
+      localStorage.setItem('nexus_session_id', id);
+    }
+    return id;
+  }
+
   let isProcessing = false;
 
   function addMessage(text, sender = 'nexus', extra = '') {
@@ -310,7 +320,7 @@ body {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ prompt: trimmed })
+        body: JSON.stringify({ prompt: trimmed, sessionId: getSessionId() })
       });
 
       if (!resp.ok) {
