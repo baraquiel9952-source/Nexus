@@ -1,0 +1,8 @@
+{
+  "name": "nexus-api",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@upstash/redis": "latest"
+  }
+}
