@@ -1,456 +1,391 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
-    <!-- Título y descripción -->
-    <title>Nexus · Copiloto</title>
-    <meta name="description" content="Tu copiloto de desarrollo con IA">
-    
-    <!-- PWA: Manifest y configuración -->
-    <link rel="manifest" href="/manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#141a24">
-    
-    <!-- PWA: Íconos para diferentes dispositivos -->
-    <link rel="apple-touch-icon" href="/icon-192.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
-    
-    <style>
-        /* ===== RESET Y BASE ===== */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-            background: #0b0e14;
-            color: #e2e8f0;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 12px;
-            margin: 0;
-            /* Evitar scrolls no deseados en PWA */
-            overflow: hidden;
-        }
-        
-        /* ===== WIDGET PRINCIPAL ===== */
-        #widget {
-            max-width: 480px;
-            width: 100%;
-            height: 90vh;
-            max-height: 900px;
-            background: #141a24;
-            border-radius: 24px;
-            border: 1px solid #2a3440;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
-            /* Mejorar rendimiento en PWA */
-            will-change: transform;
-        }
-        
-        /* ===== HEADER ===== */
-        #header {
-            padding: 18px 20px;
-            border-bottom: 1px solid #2a3440;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #0f151e;
-            flex-shrink: 0;
-            /* Para PWA: área segura en notch */
-            padding-top: env(safe-area-inset-top, 18px);
-        }
-        #header h1 {
-            font-size: 18px;
-            font-weight: 600;
-            letter-spacing: -0.3px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        #header h1 .emoji { font-size: 22px; }
-        #header h1 span { color: #60a5fa; }
-        #status {
-            font-size: 11px;
-            color: #6b7a8f;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        #status .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #22c55e;
-            display: inline-block;
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.8); }
-        }
-        
-        /* ===== CHAT ===== */
-        #chat {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            background: #0f151e;
-            /* Para scroll suave en PWA */
-            -webkit-overflow-scrolling: touch;
-        }
-        .message {
-            padding: 12px 16px;
-            border-radius: 16px;
-            max-width: 92%;
-            font-size: 14px;
-            line-height: 1.5;
-            word-wrap: break-word;
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .user { 
-            align-self: flex-end; 
-            background: #2563eb; 
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        .nexus { 
-            align-self: flex-start; 
-            background: #1e293b; 
-            border: 1px solid #334155;
-            border-bottom-left-radius: 4px;
-            color: #e2e8f0;
-        }
-        .nexus pre {
-            background: #0f151e;
-            padding: 10px 12px;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-size: 12px;
-            overflow-x: auto;
-            color: #b0c4de;
-            border-left: 3px solid #60a5fa;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .nexus .code-label {
-            font-size: 11px;
-            color: #6b7a8f;
-            margin-top: 6px;
-            display: block;
-            letter-spacing: 0.3px;
-        }
-        .typing {
-            color: #6b7a8f;
-            font-size: 13px;
-            align-self: flex-start;
-            padding: 8px 16px;
-            animation: fadeIn 0.3s ease;
-        }
-        .typing::after {
-            content: '...';
-            animation: dots 1.2s steps(3) infinite;
-        }
-        @keyframes dots { 0% { opacity: 0; } 100% { opacity: 1; } }
-        
-        /* ===== INPUT ===== */
-        #input-area {
-            padding: 14px 20px;
-            border-top: 1px solid #2a3440;
-            display: flex;
-            gap: 10px;
-            background: #0f151e;
-            flex-shrink: 0;
-            /* Para PWA: área segura en home indicator */
-            padding-bottom: env(safe-area-inset-bottom, 14px);
-        }
-        #prompt {
-            flex: 1;
-            padding: 12px 16px;
-            border-radius: 30px;
-            border: 1px solid #2a3440;
-            background: #1a2330;
-            color: #e2e8f0;
-            font-size: 14px;
-            outline: none;
-            resize: none;
-            min-height: 44px;
-            max-height: 120px;
-            font-family: inherit;
-            transition: border-color 0.2s;
-        }
-        #prompt::placeholder {
-            color: #6b7a8f;
-            opacity: 0.7;
-        }
-        #prompt:focus { border-color: #60a5fa; }
-        #send {
-            padding: 12px 20px;
-            border-radius: 30px;
-            border: none;
-            background: #2563eb;
-            color: white;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-            white-space: nowrap;
-            flex-shrink: 0;
-            touch-action: manipulation;
-        }
-        #send:active { 
-            background: #1d4ed8;
-            transform: scale(0.96);
-        }
-        #send:disabled { 
-            opacity: 0.5; 
-            pointer-events: none;
-        }
-        
-        /* ===== SCROLLBAR PERSONALIZADA ===== */
-        #chat::-webkit-scrollbar {
-            width: 4px;
-        }
-        #chat::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        #chat::-webkit-scrollbar-thumb {
-            background: #2a3440;
-            border-radius: 10px;
-        }
-        
-        /* ===== RESPONSIVE ===== */
-        @media (max-width: 480px) {
-            body { padding: 0; }
-            #widget { 
-                height: 100vh; 
-                max-height: none;
-                border-radius: 0; 
-                border: none;
-            }
-            #header {
-                padding-top: calc(env(safe-area-inset-top, 12px) + 12px);
-            }
-        }
-        
-        /* ===== MODO OSCURO (por si acaso) ===== */
-        @media (prefers-color-scheme: dark) {
-            body { background: #0b0e14; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<!-- Título y descripción -->
+<title>Nexus · Copiloto</title>
+<meta name="description" content="Tu copiloto de desarrollo con IA">
+
+<!-- PWA: Manifest y configuración -->
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141a24">
+
+<!-- PWA: Íconos para diferentes dispositivos -->
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+
+<style>
+/* ===== RESET Y BASE ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #0b0e14;
+  color: #e2e8f0;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  margin: 0;
+  overflow: hidden;
+}
+#widget {
+  max-width: 480px;
+  width: 100%;
+  height: 90vh;
+  max-height: 900px;
+  background: #141a24;
+  border-radius: 24px;
+  border: 1px solid #2a3440;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  will-change: transform;
+}
+#header {
+  padding: 18px 20px;
+  border-bottom: 1px solid #2a3440;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0f151e;
+  flex-shrink: 0;
+  padding-top: env(safe-area-inset-top, 18px);
+}
+#header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#header h1 .emoji { font-size: 22px; }
+#header h1 span { color: #60a5fa; }
+#status {
+  font-size: 11px;
+  color: #6b7a8f;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  display: inline-block;
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+#chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #0f151e;
+  -webkit-overflow-scrolling: touch;
+}
+.message {
+  padding: 12px 16px;
+  border-radius: 16px;
+  max-width: 92%;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.user {
+  align-self: flex-end;
+  background: #2563eb;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+.nexus {
+  align-self: flex-start;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-bottom-left-radius: 4px;
+  color: #e2e8f0;
+}
+.nexus pre {
+  background: #0f151e;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  overflow-x: auto;
+  color: #b0c4de;
+  border-left: 3px solid #60a5fa;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.nexus .code-label {
+  font-size: 11px;
+  color: #6b7a8f;
+  margin-top: 6px;
+  display: block;
+  letter-spacing: 0.3px;
+}
+.typing {
+  color: #6b7a8f;
+  font-size: 13px;
+  align-self: flex-start;
+  padding: 8px 16px;
+  animation: fadeIn 0.3s ease;
+}
+.typing::after {
+  content: '...';
+  animation: dots 1.2s steps(3) infinite;
+}
+@keyframes dots { 0% { opacity: 0; } 100% { opacity: 1; } }
+#input-area {
+  padding: 14px 20px;
+  border-top: 1px solid #2a3440;
+  display: flex;
+  gap: 10px;
+  background: #0f151e;
+  flex-shrink: 0;
+  padding-bottom: env(safe-area-inset-bottom, 14px);
+}
+#prompt {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 30px;
+  border: 1px solid #2a3440;
+  background: #1a2330;
+  color: #e2e8f0;
+  font-size: 14px;
+  outline: none;
+  resize: none;
+  min-height: 44px;
+  max-height: 120px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+#prompt::placeholder {
+  color: #6b7a8f;
+  opacity: 0.7;
+}
+#prompt:focus { border-color: #60a5fa; }
+#send {
+  padding: 12px 20px;
+  border-radius: 30px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+#send:active {
+  background: #1d4ed8;
+  transform: scale(0.96);
+}
+#send:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+#chat::-webkit-scrollbar { width: 4px; }
+#chat::-webkit-scrollbar-track { background: transparent; }
+#chat::-webkit-scrollbar-thumb { background: #2a3440; border-radius: 10px; }
+@media (max-width: 480px) {
+  body { padding: 0; }
+  #widget { height: 100vh; max-height: none; border-radius: 0; border: none; }
+  #header { padding-top: calc(env(safe-area-inset-top, 12px) + 12px); }
+}
+@media (prefers-color-scheme: dark) {
+  body { background: #0b0e14; }
+}
+</style>
 </head>
 <body>
-
 <div id="widget">
-    <!-- HEADER -->
-    <div id="header">
-        <h1>
-            <span class="emoji">🧠</span>
-            <span>Nexus</span> · copiloto
-        </h1>
-        <div id="status">
-            <span class="dot"></span> activo
-        </div>
+  <div id="header">
+    <h1>
+      <span class="emoji">🧠</span>
+      <span>Nexus</span> · copiloto
+    </h1>
+    <div id="status">
+      <span class="dot"></span> activo
     </div>
-    
-    <!-- CHAT -->
-    <div id="chat"></div>
-    
-    <!-- INPUT -->
-    <div id="input-area">
-        <textarea id="prompt" rows="1" placeholder="Pega código o escribe..."></textarea>
-        <button id="send">→</button>
-    </div>
+  </div>
+  <div id="chat"></div>
+  <div id="input-area">
+    <textarea id="prompt" rows="1" placeholder="Pega código o escribe..."></textarea>
+    <button id="send">→</button>
+  </div>
 </div>
 
 <script>
-    // ============================================================
-    //  NEXUS — CLIENTE COMPLETO (con PWA y mejoras)
-    // ============================================================
-    
-    (function() {
-        'use strict';
-        
-        // --- Elementos DOM ---
-        const chat = document.getElementById('chat');
-        const prompt = document.getElementById('prompt');
-        const sendBtn = document.getElementById('send');
-        const API_URL = '/api/nexus';
-        
-        // --- Estado ---
-        let isProcessing = false;
-        
-        // --- Funciones de UI ---
-        function addMessage(text, sender = 'nexus', extra = '') {
-            const div = document.createElement('div');
-            div.className = `message ${sender}`;
-            
-            // Procesar markdown básico (negritas con **)
-            const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            div.innerHTML = formatted;
-            
-            if (extra) {
-                const pre = document.createElement('pre');
-                pre.textContent = extra;
-                div.appendChild(pre);
-                
-                const label = document.createElement('span');
-                label.className = 'code-label';
-                label.textContent = '📋 Código sugerido';
-                div.appendChild(label);
-            }
-            
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
-        
-        function showTyping() {
-            const div = document.createElement('div');
-            div.className = 'typing';
-            div.id = 'typing-indicator';
-            div.textContent = 'Nexus está pensando';
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
-        
-        function hideTyping() {
-            const el = document.getElementById('typing-indicator');
-            if (el) el.remove();
-        }
-        
-        function setProcessing(state) {
-            isProcessing = state;
-            sendBtn.disabled = state;
-            if (state) {
-                prompt.disabled = true;
-            } else {
-                prompt.disabled = false;
-                prompt.focus();
-            }
-        }
-        
-        // --- Lógica principal ---
-        async function sendToNexus(text) {
-            const trimmed = text.trim();
-            if (!trimmed || isProcessing) return;
-            
-            // Mostrar mensaje del usuario
-            addMessage(trimmed, 'user');
-            prompt.value = '';
-            prompt.style.height = 'auto';
-            
-            setProcessing(true);
-            showTyping();
-            
-            try {
-                const resp = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ prompt: trimmed })
-                });
-                
-                // Manejar errores HTTP
-                if (!resp.ok) {
-                    const errorData = await resp.json().catch(() => ({}));
-                    throw new Error(errorData.error || `Error ${resp.status}: ${resp.statusText}`);
-                }
-                
-                const data = await resp.json();
-                hideTyping();
-                
-                if (data.error) {
-                    addMessage(`⚠️ ${data.error}`, 'nexus');
-                } else {
-                    const reply = data.response || 'No entendí eso. Intenta ser más específico.';
-                    const code = data.code_snippet || '';
-                    addMessage(reply, 'nexus', code);
-                }
-                
-            } catch (error) {
-                hideTyping();
-                let msg = error.message || 'Error desconocido';
-                // Mensajes más amigables para errores comunes
-                if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-                    msg = 'No pude conectar con el servidor. ¿Vercel está funcionando?';
-                }
-                addMessage(`❌ ${msg}`, 'nexus');
-                console.error('[Nexus Client] Error:', error);
-            } finally {
-                setProcessing(false);
-            }
-        }
-        
-        // --- Event Listeners ---
-        sendBtn.addEventListener('click', () => sendToNexus(prompt.value));
-        
-        prompt.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendToNexus(prompt.value);
-            }
-        });
-        
-        // Auto-expand textarea
-        prompt.addEventListener('input', () => {
-            prompt.style.height = 'auto';
-            prompt.style.height = prompt.scrollHeight + 'px';
-        });
-        
-        // Enfocar al cargar (útil en PWA)
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => prompt.focus(), 300);
-        });
-        
-        // --- Bienvenida ---
-        addMessage(
-            '👋 Tarek. Soy Nexus. Copiloto activado. Comparte código o descríbeme lo que estás construyendo.',
-            'nexus'
-        );
-        
-        // --- Registrar Service Worker (PWA) ---
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
-                .then(reg => {
-                    console.log('✅ Service Worker registrado correctamente');
-                })
-                .catch(err => {
-                    console.warn('⚠️ Service Worker no registrado:', err);
-                    // No es crítico, la app sigue funcionando
-                });
-        }
-        
-        // --- Detectar instalación PWA (para analytics opcionales) ---
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            console.log('📱 PWA: App lista para instalar');
-            // Podríamos mostrar un botón de instalación aquí si quisiéramos
-        });
-        
-        window.addEventListener('appinstalled', () => {
-            console.log('📱 PWA: App instalada correctamente');
-        });
-        
-        console.log('🧠 Nexus Client v2.0 — PWA ready');
-        
-    })();
+(function() {
+  'use strict';
+
+  const chat = document.getElementById('chat');
+  const prompt = document.getElementById('prompt');
+  const sendBtn = document.getElementById('send');
+
+  // ⚠️ Ahora el frontend vive en Render y el API en Vercel: URL absoluta obligatoria
+  const API_URL = 'https://nexus-eight-weld-52.vercel.app/api/nexus';
+
+  let isProcessing = false;
+
+  function addMessage(text, sender = 'nexus', extra = '') {
+    const div = document.createElement('div');
+    div.className = `message ${sender}`;
+    const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    div.innerHTML = formatted;
+    if (extra) {
+      const pre = document.createElement('pre');
+      pre.textContent = extra;
+      div.appendChild(pre);
+      const label = document.createElement('span');
+      label.className = 'code-label';
+      label.textContent = '📋 Código sugerido';
+      div.appendChild(label);
+    }
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function showTyping() {
+    const div = document.createElement('div');
+    div.className = 'typing';
+    div.id = 'typing-indicator';
+    div.textContent = 'Nexus está pensando';
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function hideTyping() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+  }
+
+  function setProcessing(state) {
+    isProcessing = state;
+    sendBtn.disabled = state;
+    if (state) {
+      prompt.disabled = true;
+    } else {
+      prompt.disabled = false;
+      prompt.focus();
+    }
+  }
+
+  async function sendToNexus(text) {
+    const trimmed = text.trim();
+    if (!trimmed || isProcessing) return;
+
+    addMessage(trimmed, 'user');
+    prompt.value = '';
+    prompt.style.height = 'auto';
+    setProcessing(true);
+    showTyping();
+
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ prompt: trimmed })
+      });
+
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        throw new Error(errorData.error || `Error ${resp.status}: ${resp.statusText}`);
+      }
+
+      const data = await resp.json();
+      hideTyping();
+
+      if (data.error) {
+        addMessage(`⚠️ ${data.error}`, 'nexus');
+      } else {
+        const reply = data.response || 'No entendí eso. Intenta ser más específico.';
+        const code = data.code_snippet || '';
+        addMessage(reply, 'nexus', code);
+      }
+    } catch (error) {
+      hideTyping();
+      let msg = error.message || 'Error desconocido';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        msg = 'No pude conectar con el servidor. ¿El API en Vercel está funcionando?';
+      }
+      addMessage(`❌ ${msg}`, 'nexus');
+      console.error('[Nexus Client] Error:', error);
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  sendBtn.addEventListener('click', () => sendToNexus(prompt.value));
+  prompt.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendToNexus(prompt.value);
+    }
+  });
+
+  prompt.addEventListener('input', () => {
+    prompt.style.height = 'auto';
+    prompt.style.height = prompt.scrollHeight + 'px';
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => prompt.focus(), 300);
+  });
+
+  addMessage(
+    '👋 Tarek. Soy Nexus. Copiloto activado. Comparte código o descríbeme lo que estás construyendo.',
+    'nexus'
+  );
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        console.log('✅ Service Worker registrado correctamente');
+      })
+      .catch(err => {
+        console.warn('⚠️ Service Worker no registrado:', err);
+      });
+  }
+
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    console.log('📱 PWA: App lista para instalar');
+  });
+
+  window.addEventListener('appinstalled', () => {
+    console.log('📱 PWA: App instalada correctamente');
+  });
+
+  console.log('🧠 Nexus Client v2.1 — PWA ready (frontend: Render / API: Vercel)');
+})();
 </script>
 </body>
-    </html>
+</html>
