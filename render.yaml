@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: nexus-frontend
+    runtime: static
+    buildCommand: "true"
+    staticPublishPath: "."
+    headers:
+      - path: /sw.js
+        name: Service-Worker-Allowed
+        value: /
