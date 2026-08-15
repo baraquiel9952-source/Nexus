@@ -1,7 +1,12 @@
-// api/nexus.js — Nexus v4
-// Analizador de código multi-lenguaje por reglas/regex (sin IA) + verificación de paquetes
-// contra registries reales: npm, PyPI, crates.io, proxy.golang.org, Packagist
-// Cubre: JavaScript, TypeScript, Python, Java, C/C++, C#, PHP, Go, Rust, Ruby, HTML, CSS, SQL, JSON
+// api/nexus.js — Nexus v5
+// Analizador de código multi-lenguaje por reglas/regex (sin IA):
+// 1-6: análisis de código + paquetes reales (npm/PyPI/crates.io/Go/Packagist) — igual que v4
+// 7:  métricas de calidad (anidación, complejidad ciclomática aproximada, funciones largas)
+// 8:  diagnóstico de errores/stack traces
+// 9:  comparador de código (diff)
+// 10: búsqueda en Google (respaldo)
+// 11: memoria de sesión vía Redis (Vercel Marketplace) — necesita configuración extra, ver sección
+// 12: biblioteca de plantillas de código
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,13 +15,13 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Solo POST permitido' });
 
-    const { prompt } = req.body;
+    const { prompt, sessionId } = req.body;
     if (!prompt || prompt.trim().length < 2) {
         return res.status(400).json({ error: 'Mensaje demasiado corto.' });
     }
 
     try {
-        const response = await processPrompt(prompt);
+        const response = await processPrompt(prompt, sessionId);
         return res.status(200).json(response);
     } catch (err) {
         return res.status(500).json({ error: 'Error interno en Nexus.', detail: err.message });
@@ -37,6 +42,14 @@ function extractCode(input) {
         if (hits >= Math.max(2, Math.ceil(lines.length * 0.3))) return input.trim();
     }
     return null;
+}
+
+function extractAllCodeBlocks(input) {
+    const blocks = [];
+    const re = /```(\w*)\n?([\s\S]*?)```/g;
+    let m;
+    while ((m = re.exec(input))) blocks.push(m[2].trim());
+    return blocks;
 }
 
 // ============================================================
@@ -174,7 +187,7 @@ function universalChecks(rawCode) {
 }
 
 // ============================================================
-// 5. CHEQUEOS POR LENGUAJE
+// 5. CHEQUEOS POR LENGUAJE (incluye reglas de seguridad ampliadas)
 // ============================================================
 function jsChecks(raw, stripped) {
     const issues = [];
@@ -187,6 +200,9 @@ function jsChecks(raw, stripped) {
         if (/\bdebugger\b/.test(line)) issues.push({ line: n, severity: 'warning', message: 'Sentencia "debugger" olvidada' });
         if (/if\s*\(\s*[\w.]+\s*=(?!=)[^=]/.test(line)) issues.push({ line: n, severity: 'error', message: 'Posible bug: asignación "=" dentro de una condición (¿querías "=="?)' });
         if (/catch\s*\([^)]*\)\s*\{\s*\}/.test(line)) issues.push({ line: n, severity: 'warning', message: 'Bloque catch vacío: está silenciando el error' });
+        if (/\beval\s*\(/.test(line)) issues.push({ line: n, severity: 'critico', message: 'eval() es un riesgo de seguridad grave — evita ejecutar strings como código' });
+        if (/\.innerHTML\s*=\s*(?!['"`])/.test(line)) issues.push({ line: n, severity: 'warning', message: 'innerHTML con una variable — riesgo de XSS si el contenido viene de un usuario. Usa textContent o sanitiza' });
+        if (/document\.write\s*\(/.test(line)) issues.push({ line: n, severity: 'warning', message: 'document.write() es mala práctica y riesgo de XSS' });
     });
     const full = stripped.join('\n');
     if (/\.then\(/.test(full) && !/\.catch\(/.test(full)) {
@@ -194,6 +210,9 @@ function jsChecks(raw, stripped) {
     }
     if (/\bawait\b/.test(full) && !/\btry\b/.test(full) && !/\.catch\(/.test(full)) {
         issues.push({ line: 0, severity: 'warning', message: 'Uso de "await" sin try/catch ni .catch() — errores no controlados' });
+    }
+    if (/Math\.random\(\)/.test(full) && /(token|password|contrase|secret|session)/i.test(full)) {
+        issues.push({ line: 0, severity: 'critico', message: 'Math.random() no es criptográficamente seguro — no lo uses para tokens/contraseñas/sesiones. Usa crypto.randomBytes()' });
     }
     return issues;
 }
@@ -207,6 +226,11 @@ function pyChecks(raw, stripped) {
         if (/==\s*None\b/.test(line)) issues.push({ line: n, severity: 'info', message: 'Usa "is None" en vez de "== None"' });
         if (/==\s*(True|False)\b/.test(line)) issues.push({ line: n, severity: 'info', message: 'Comparación redundante con True/False, usa la variable directo' });
         if (/\bprint\(/.test(line)) issues.push({ line: n, severity: 'info', message: 'print() de depuración' });
+        if (/\beval\s*\(/.test(line)) issues.push({ line: n, severity: 'critico', message: 'eval() es un riesgo de seguridad grave' });
+        if (/\bexec\s*\(/.test(line)) issues.push({ line: n, severity: 'critico', message: 'exec() ejecuta código arbitrario — riesgo de seguridad' });
+        if (/pickle\.loads?\(/.test(line)) issues.push({ line: n, severity: 'critico', message: 'pickle.loads() sobre datos no confiables permite ejecución de código arbitrario' });
+        if (/subprocess\.\w+\([^)]*shell\s*=\s*True/.test(line)) issues.push({ line: n, severity: 'critico', message: 'shell=True con input externo es riesgo de inyección de comandos' });
+        if (/hashlib\.(md5|sha1)\(/.test(line)) issues.push({ line: n, severity: 'warning', message: 'MD5/SHA1 son débiles para contraseñas — usa bcrypt/scrypt/argon2' });
     });
     return issues;
 }
@@ -219,6 +243,8 @@ function javaChecks(raw, stripped) {
         if (/==\s*"/.test(line) || /"\s*==/.test(line)) issues.push({ line: n, severity: 'error', message: 'Compara Strings con .equals(), no con =="' });
         if (/System\.out\.println\(/.test(line)) issues.push({ line: n, severity: 'info', message: 'System.out.println de depuración' });
         if (/String\s+\w+\s*\+=/.test(line)) issues.push({ line: n, severity: 'info', message: 'Concatenar String con += en un loop es lento — usa StringBuilder' });
+        if (/MessageDigest\.getInstance\(\s*["'](MD5|SHA-1)["']/i.test(line)) issues.push({ line: n, severity: 'warning', message: 'MD5/SHA-1 son débiles para contraseñas — usa bcrypt/PBKDF2/Argon2' });
+        if (/Cipher\.getInstance\(\s*["'][^"']*(DES|ECB)[^"']*["']/.test(line)) issues.push({ line: n, severity: 'critico', message: 'DES o modo ECB son criptográficamente débiles — usa AES/GCM' });
     });
     return issues;
 }
@@ -253,6 +279,7 @@ function cppChecks(raw, stripped) {
 
 function phpChecks(raw, stripped) {
     const issues = [];
+    const full = stripped.join('\n');
     stripped.forEach((line, idx) => {
         const n = idx + 1;
         if (/(?<![=!<>])==(?!=)/.test(line)) issues.push({ line: n, severity: 'info', message: 'Considera "===" para comparación estricta' });
@@ -262,6 +289,9 @@ function phpChecks(raw, stripped) {
             issues.push({ line: n, severity: 'critico', message: 'Posible SQL injection: input de usuario concatenado directo en un query' });
         }
     });
+    if (/\b(md5|sha1)\s*\(/.test(full) && /pass|contrase/i.test(full)) {
+        issues.push({ line: 0, severity: 'warning', message: 'MD5/SHA1 son débiles para contraseñas — usa password_hash()/password_verify()' });
+    }
     return issues;
 }
 
@@ -355,69 +385,4 @@ function jsonChecks(raw) {
     return issues;
 }
 
-const LANG_CHECKERS = {
-    javascript: jsChecks, typescript: jsChecks,
-    python: pyChecks, java: javaChecks, csharp: csharpChecks,
-    cpp: cppChecks, php: phpChecks, go: goChecks, rust: rustChecks, ruby: rubyChecks,
-    html: htmlChecks, css: cssChecks, sql: sqlChecks, json: jsonChecks,
-};
-
-const LANG_NAMES = {
-    javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', java: 'Java',
-    cpp: 'C/C++', csharp: 'C#', php: 'PHP', go: 'Go', rust: 'Rust', ruby: 'Ruby',
-    html: 'HTML', css: 'CSS', sql: 'SQL', json: 'JSON', generico: 'código',
-};
-
-const SEVERITY_EMOJI = { critico: '🔴', error: '🟠', warning: '🟡', info: '🔵' };
-const SEVERITY_ORDER = { critico: 0, error: 1, warning: 2, info: 3 };
-
-// ============================================================
-// 6. VERIFICACIÓN DE PAQUETES CONTRA REGISTRIES REALES
-//    (npm, PyPI, crates.io, proxy.golang.org, Packagist)
-// ============================================================
-const REGISTRY_LIMIT = 6; // tope de paquetes por análisis, para no exceder el tiempo de ejecución
-
-async function fetchWithTimeout(url, ms = 3000, opts = {}) {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), ms);
-    try {
-        const r = await fetch(url, { ...opts, signal: controller.signal });
-        return r;
-    } finally {
-        clearTimeout(t);
-    }
-}
-
-function extractJsPackages(code) {
-    const pkgs = new Set();
-    const importRe = /import\s+(?:[\w*{}\s,]+from\s+)?['"]([^'"]+)['"]/g;
-    const requireRe = /require\(\s*['"]([^'"]+)['"]\s*\)/g;
-    let m;
-    while ((m = importRe.exec(code))) pkgs.add(m[1]);
-    while ((m = requireRe.exec(code))) pkgs.add(m[1]);
-    return [...pkgs]
-        .filter(p => !p.startsWith('.') && !p.startsWith('/'))
-        .map(p => p.startsWith('@') ? p.split('/').slice(0, 2).join('/') : p.split('/')[0]);
-}
-
-const PY_STDLIB = new Set(['os', 'sys', 're', 'json', 'math', 'random', 'time', 'datetime', 'collections',
-    'itertools', 'functools', 'typing', 'pathlib', 'logging', 'subprocess', 'threading', 'asyncio',
-    'unittest', 'abc', 'io', 'enum', 'copy', 'string', 'http', 'urllib', 'sqlite3', 'csv', 'xml',
-    'socket', 'struct', 'hashlib', 'base64', 'argparse', 'shutil', 'tempfile', 'glob', 'pickle',
-    'queue', 'traceback', 'warnings', 'contextlib', 'dataclasses']);
-
-function extractPyPackages(code) {
-    const pkgs = new Set();
-    const importRe = /^\s*import\s+([\w.]+)/gm;
-    const fromRe = /^\s*from\s+([\w.]+)\s+import/gm;
-    let m;
-    while ((m = importRe.exec(code))) pkgs.add(m[1].split('.')[0]);
-    while ((m = fromRe.exec(code))) pkgs.add(m[1].split('.')[0]);
-    return [...pkgs].filter(p => !PY_STDLIB.has(p));
-}
-
-function extractGoPackages(code) {
-    const found = [];
-    const block = /import\s*\(([\s\S]*?)\)/.exec(code);
-    if (block) {
-      
+const LANG_CHECKER
