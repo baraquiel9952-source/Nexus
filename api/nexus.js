@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Solo POST permitido' });
 
     const { prompt } = req.body;
-    if (!prompt || prompt.trim().length < 2) {
+ww    if (!prompt || prompt.trim().length < 2) {
         return res.status(400).json({ error: 'Mensaje demasiado corto.' });
     }
 
