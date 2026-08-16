@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@upstash/redis": "latest"
+    "@upstash/redis": "latest",
+    "@babel/parser": "latest",
+    "@babel/traverse": "latest"
   }
 }
