@@ -5,6 +5,8 @@
   "dependencies": {
     "@upstash/redis": "latest",
     "@babel/parser": "latest",
-    "@babel/traverse": "latest"
+    "@babel/traverse": "latest",
+    "web-tree-sitter": "0.25.7",
+    "tree-sitter-wasms": "latest"
   }
 }
