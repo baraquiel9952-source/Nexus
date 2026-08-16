@@ -1,5 +1,7 @@
 {
   "functions": {
-    "api/nexus.js": {}
+    "api/nexus.js": {
+      "maxDuration": 10
+    }
   }
 }
